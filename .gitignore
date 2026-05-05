@@ -1,0 +1,25 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+catall
+
+# `go test -c`
+*.test
+
+# Coverage & profiling
+*.out
+coverage.*
+*.prof
+*.pprof
+
+# Go workspace (local multi-module checkout)
+go.work
+go.work.sum
+
+# OS
+.DS_Store
+
+.claude
+.idea
