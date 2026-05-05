@@ -20,6 +20,36 @@ const (
 	ansiReset = "\033[0m"
 )
 
+// defaultExcludeDirs are skipped automatically unless --all is set.
+// They are almost never useful to read and tend to produce enormous output.
+var defaultExcludeDirs = []string{
+	// version control
+	".git", ".svn", ".hg", ".bzr",
+	// javascript / typescript
+	"node_modules", ".npm", ".yarn", ".pnp", ".pnpm-store",
+	// python
+	"__pycache__", ".venv", "venv", "env", ".env",
+	".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+	// go
+	"vendor",
+	// rust
+	"target",
+	// java / kotlin
+	".gradle", ".mvn",
+	// generic build & dist outputs
+	"build", "dist", "out", "bin", ".build",
+	// IDEs & editors
+	".idea", ".vscode", ".vs", ".fleet",
+	// frontend frameworks / tooling
+	".next", ".nuxt", ".svelte-kit", ".turbo", ".parcel-cache",
+	// infrastructure
+	".terraform", ".terragrunt-cache",
+	// caches & temp
+	".cache", "tmp", "temp", ".tmp",
+	// test coverage
+	"coverage", "htmlcov", ".nyc_output",
+}
+
 // config is the resolved runtime configuration derived from CLI flags.
 type config struct {
 	root         string
@@ -39,6 +69,7 @@ func main() {
 		withFilename = flag.Bool("with-filename", true, "print a header with the file path before each file's contents")
 		maxSizeMB    = flag.Float64("max-size", 0, "skip files larger than N megabytes (0 = no limit)")
 		noColor      = flag.Bool("no-color", false, "disable ANSI colored headers")
+		allDirs      = flag.Bool("all", false, "include default-excluded directories (node_modules, .git, build, vendor, …)")
 	)
 
 	flag.Usage = printUsage
@@ -68,8 +99,19 @@ func main() {
 	if *extFlag != "" {
 		cfg.extensions = parseCSV(*extFlag)
 	}
+
+	// Build the exclude set: start with defaults (unless --all), then layer
+	// any user-provided --exclude entries on top.
+	cfg.excludeDirs = make(map[string]bool)
+	if !*allDirs {
+		for _, d := range defaultExcludeDirs {
+			cfg.excludeDirs[d] = true
+		}
+	}
 	if *excludeFlag != "" {
-		cfg.excludeDirs = parseCSV(*excludeFlag)
+		for d := range parseCSV(*excludeFlag) {
+			cfg.excludeDirs[d] = true
+		}
 	}
 
 	if err := walkDir(cfg); err != nil {
@@ -272,8 +314,11 @@ EXAMPLES:
     # Only include Go and Markdown files
     catall --ext ".go,.md" ./project
 
-    # Skip common noise directories and files larger than 1 MB
-    catall --exclude "node_modules,.git,vendor" --max-size 1.0 ./project
+    # Add extra directories on top of the default ignore list
+    catall --exclude ".env.local,secrets" ./project
+
+    # Include everything — bypass the default ignore list
+    catall --all ./project
 
     # Pipe without color codes (color is auto-disabled when not a terminal)
     catall --no-color | less
